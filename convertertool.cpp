@@ -108,11 +108,12 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
     audioEncCtx->bit_rate = 128000;
     audioEncCtx->time_base = { 1, audioEncCtx->sample_rate };
 
-
+    // 👇【TS必须先打开编码器】再 new stream！！！
+    avcodec_open2(audioEncCtx, aEnc, nullptr);
     AVStream *outAudio = avformat_new_stream(ofmtCtx, aEnc);
     avcodec_parameters_from_context(outAudio->codecpar, audioEncCtx);
     outAudio->time_base = audioEncCtx->time_base;
-    avcodec_open2(audioEncCtx, aEnc, nullptr);
+
 
     // ==========================
     // 8. 音频重采样（安全版）
