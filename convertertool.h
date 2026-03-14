@@ -27,6 +27,7 @@ public:
     void setBitrate(int64_t bitrate);
     void setFrameRate(int frameRate);
     void setVideoEncode(QString videoEncode);
+    void setAudioEncode(QString audioEncode);
 
 private:
     QStringList m_inPaths;

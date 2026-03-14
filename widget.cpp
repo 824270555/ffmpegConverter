@@ -258,6 +258,7 @@ void Widget::on_pushButton_startConcerter_clicked()
     m_convert->setBitrate(ui->comboBox_Bitrate->currentText().toInt() * 1000);
     m_convert->setFrameRate(ui->comboBox_frameRate->currentText().toInt());
     m_convert->setVideoEncode(ui->comboBox_videoEncodeType->currentText());
+    m_convert->setAudioEncode(ui->comboBox_audioEncodeType->currentText());
     emit startWork();
 }
 

@@ -112,10 +112,25 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
     // ==========================
     // 7. 音频编码器 AAC（修复）
     // ==========================
-    const AVCodec *aEnc = avcodec_find_encoder(AV_CODEC_ID_AAC);
-    audioEncCtx = avcodec_alloc_context3(aEnc);
 
-    audioEncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    if (m_audioEncode == "aac")
+    {
+        id = AV_CODEC_ID_AAC;
+    }
+    else if (m_audioEncode == "libmp3lame")
+    {
+        id = AV_CODEC_ID_MP3;
+    }
+    else
+    {
+        id = AV_CODEC_ID_AAC;
+    }
+    const AVCodec *aEnc = avcodec_find_encoder(id);
+    audioEncCtx = avcodec_alloc_context3(aEnc);
+    if (m_audioEncode == "libmp3lame")
+        audioEncCtx->sample_fmt = AV_SAMPLE_FMT_S16P;
+    else
+        audioEncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
     audioEncCtx->sample_rate = audioDecCtx->sample_rate;
     audioEncCtx->channels = audioDecCtx->channels;
     audioEncCtx->channel_layout = av_get_default_channel_layout(audioEncCtx->channels);
@@ -353,6 +368,11 @@ void ConverterTool::setFrameRate(int frameRate)
 void ConverterTool::setVideoEncode(QString videoEncode)
 {
     m_videoEncode = videoEncode;
+}
+
+void ConverterTool::setAudioEncode(QString audioEncode)
+{
+    m_audioEncode = audioEncode;
 }
 
 void ConverterTool::doWork()
