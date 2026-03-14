@@ -26,6 +26,7 @@ public:
     void setMuxerType(QString type);
     void setBitrate(int64_t bitrate);
     void setFrameRate(int frameRate);
+    void setVideoEncode(QString videoEncode);
 
 private:
     QStringList m_inPaths;
@@ -35,6 +36,9 @@ private:
     QString m_muxerType;
     int64_t m_bitrate;
     int m_frameRate;
+    QString m_videoEncode;
+    QString m_audioEncode;
+    int64_t m_nextPts;
 
 signals:
     void progress(double percent);    // 进度 0~100

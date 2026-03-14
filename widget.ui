@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1079</width>
+    <width>1082</width>
     <height>543</height>
    </rect>
   </property>
@@ -245,6 +245,11 @@
        <string>ts</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>avi</string>
+      </property>
+     </item>
     </widget>
    </item>
    <item row="3" column="7">
@@ -346,6 +351,11 @@
    </item>
    <item row="3" column="12">
     <widget class="QComboBox" name="comboBox_frameRate">
+     <item>
+      <property name="text">
+       <string>24</string>
+      </property>
+     </item>
      <item>
       <property name="text">
        <string>25</string>

@@ -73,19 +73,33 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
     avformat_alloc_output_context2(&ofmtCtx, nullptr, nullptr, outputPath.toLocal8Bit().data());
 
     // ==========================
-    // 6. 视频编码器 H.265
+    // 6. 视频编码器
     // ==========================
-    const AVCodec *vEnc = avcodec_find_encoder(AV_CODEC_ID_H264);
+    enum AVCodecID id = AV_CODEC_ID_H264;
+    if (m_videoEncode == "libx264")
+    {
+        id = AV_CODEC_ID_H264;
+    }
+    else if (m_videoEncode == "libx265")
+    {
+        id = AV_CODEC_ID_H265;
+    }
+    else if (m_videoEncode == "libxvid")
+    {
+        id = AV_CODEC_ID_MPEG4;
+    }
+    const AVCodec *vEnc = avcodec_find_encoder(id);
     videoEncCtx = avcodec_alloc_context3(vEnc);
     videoEncCtx->width = m_width;
     videoEncCtx->height = m_height;
     videoEncCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-    videoEncCtx->time_base = inVideo->time_base;
-    videoEncCtx->framerate = av_guess_frame_rate(ifmtCtx, inVideo, nullptr);
+    videoEncCtx->time_base = (AVRational){ 1, m_frameRate };
+    videoEncCtx->framerate = (AVRational){ m_frameRate, 1 };
     videoEncCtx->bit_rate = m_bitrate;
 
     // H.264 必须加 profile，否则兼容性差
-    videoEncCtx->profile = FF_PROFILE_H264_MAIN;
+    if (m_videoEncode == "libx264")
+        videoEncCtx->profile = FF_PROFILE_H264_MAIN;
 
     av_opt_set(videoEncCtx->priv_data, "preset", "fast", 0);
     //av_opt_set(videoEncCtx->priv_data, "crf", "23", 0);
@@ -167,7 +181,7 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
                     // ==========================
                     // ✅ 修复视频倍速关键代码
                     // ==========================
-                    frameScaled->pts = frame->pts;  // 继承原始时间戳！！！
+                    frameScaled->pts = m_nextPts ++;  // 继承原始时间戳！！！
 
                     // ==========================
                     // 缩放器（正确写法）
@@ -219,6 +233,7 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
                 outFrame->channel_layout = audioEncCtx->channel_layout;
                 outFrame->sample_rate = audioEncCtx->sample_rate;
                 av_frame_get_buffer(outFrame, 0);
+                av_frame_make_writable(outFrame); // 必须加，防止非法内存
 
                 // 重采样
                 swr_convert(swrCtx,
@@ -335,12 +350,18 @@ void ConverterTool::setFrameRate(int frameRate)
     m_frameRate = frameRate;
 }
 
+void ConverterTool::setVideoEncode(QString videoEncode)
+{
+    m_videoEncode = videoEncode;
+}
+
 void ConverterTool::doWork()
 {
     for (int i = 0; i < m_inPaths.size(); i++)
     {
         QString inPath = m_inPaths.at(i);
         QFileInfo fileInfo(inPath);
+        m_nextPts = 0;
         startConvert(inPath, m_outPath + "/out_" + fileInfo.baseName() + "." + m_muxerType);
     }
 }
