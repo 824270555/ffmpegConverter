@@ -13,6 +13,7 @@ extern "C"
 #include <libavutil/mem.h>
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
+#include <libavutil/audio_fifo.h>
 }
 
 class ConverterTool : public QObject

@@ -22,7 +22,7 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
     AVCodecContext *audioEncCtx = nullptr;
 
     SwrContext *swrCtx = nullptr;
-
+    AVAudioFifo *audioFifo = nullptr;
     // ==========================
     // 1. 打开输入文件
     // ==========================
@@ -152,6 +152,12 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
         audioDecCtx->channel_layout, audioDecCtx->sample_fmt, audioDecCtx->sample_rate,
         0, nullptr);
     swr_init(swrCtx);
+    // 音频重采样后，初始化 FIFO
+    audioFifo = av_audio_fifo_alloc(
+        audioEncCtx->sample_fmt,
+        audioEncCtx->channels,
+        4096 * 4    // 足够大
+    );
 
     // ==========================
     // 9. 打开输出文件
@@ -242,36 +248,69 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
             AVFrame *frame = av_frame_alloc();
             while (avcodec_receive_frame(audioDecCtx, frame) == 0)
             {
+                // ==============================================
+                // 1. 重采样到目标格式
+                // ==============================================
+                int maxOutputSamples = av_rescale_rnd(
+                    frame->nb_samples,
+                    audioEncCtx->sample_rate,
+                    audioDecCtx->sample_rate,
+                    AV_ROUND_UP
+                );
+
                 AVFrame *outFrame = av_frame_alloc();
-                outFrame->nb_samples = audioEncCtx->frame_size;
+
                 outFrame->format = audioEncCtx->sample_fmt;
                 outFrame->channel_layout = audioEncCtx->channel_layout;
                 outFrame->sample_rate = audioEncCtx->sample_rate;
+                outFrame->nb_samples = maxOutputSamples;
                 av_frame_get_buffer(outFrame, 0);
                 av_frame_make_writable(outFrame); // 必须加，防止非法内存
 
                 // 重采样
-                swr_convert(swrCtx,
+               int converted = swr_convert(swrCtx,
                     outFrame->data, outFrame->nb_samples,
                     (const uint8_t**)frame->data, frame->nb_samples);
 
-                // 音频 PTS（安全自增，永不崩溃）
-                outFrame->pts = audioPts;
-                audioPts += outFrame->nb_samples;
+               outFrame->nb_samples = converted;
 
-                // 编码
-                if (avcodec_send_frame(audioEncCtx, outFrame) >= 0) {
-                    AVPacket epkt;
-                    av_init_packet(&epkt);
-                    epkt.data = nullptr;
-                    epkt.size = 0;
-                    while (avcodec_receive_packet(audioEncCtx, &epkt) == 0) {
-                        epkt.stream_index = outAudio->index;
-                        av_packet_rescale_ts(&epkt, audioEncCtx->time_base, outAudio->time_base);
-                        av_interleaved_write_frame(ofmtCtx, &epkt);
-                        av_packet_unref(&epkt);
-                    }
-                }
+                 // ==============================================
+                 // 2. 写入 FIFO（关键！）
+                 // ==============================================
+                 av_audio_fifo_write(audioFifo, (void**)outFrame->data, converted);
+
+                 while (av_audio_fifo_size(audioFifo) >= audioEncCtx->frame_size)
+                 {
+                     AVFrame *encodeFrame = av_frame_alloc();
+                     encodeFrame->nb_samples = audioEncCtx->frame_size;
+                     encodeFrame->format = audioEncCtx->sample_fmt;
+                     encodeFrame->channel_layout = audioEncCtx->channel_layout;
+                     encodeFrame->sample_rate = audioEncCtx->sample_rate;
+                     av_frame_get_buffer(encodeFrame, 0);
+
+                     // 从 FIFO 读一帧
+                     av_audio_fifo_read(audioFifo, (void**)encodeFrame->data, audioEncCtx->frame_size);
+
+                     // 音频 PTS（安全自增，永不崩溃）
+                     encodeFrame->pts = audioPts;
+                     audioPts += encodeFrame->nb_samples;
+
+                     // 编码
+                     if (avcodec_send_frame(audioEncCtx, encodeFrame) >= 0) {
+                         AVPacket epkt;
+                         av_init_packet(&epkt);
+                         epkt.data = nullptr;
+                         epkt.size = 0;
+                         while (avcodec_receive_packet(audioEncCtx, &epkt) == 0) {
+                             epkt.stream_index = outAudio->index;
+                             av_packet_rescale_ts(&epkt, audioEncCtx->time_base, outAudio->time_base);
+                             av_interleaved_write_frame(ofmtCtx, &epkt);
+                             av_packet_unref(&epkt);
+                         }
+                     }
+                     av_frame_free(&encodeFrame);
+                 }
+
                 av_frame_free(&outFrame);
             }
             av_frame_free(&frame);
@@ -297,25 +336,46 @@ void ConverterTool::startConvert(QString inputPath, QString outputPath)
         emit progress(prog);
     }
     emit progress(100); //跳出来后强制100%
+
+    // ==========================
+    // 刷新音频FIFO剩余数据
+    // ==========================
+    while (av_audio_fifo_size(audioFifo) > 0)
+    {
+        AVFrame *encodeFrame = av_frame_alloc();
+        encodeFrame->nb_samples = FFMIN(av_audio_fifo_size(audioFifo), audioEncCtx->frame_size);
+        encodeFrame->format = audioEncCtx->sample_fmt;
+        encodeFrame->channel_layout = audioEncCtx->channel_layout;
+        av_frame_get_buffer(encodeFrame, 0);
+
+        av_audio_fifo_read(audioFifo, (void**)encodeFrame->data, encodeFrame->nb_samples);
+        encodeFrame->pts = audioPts;
+        audioPts += encodeFrame->nb_samples;
+
+        avcodec_send_frame(audioEncCtx, encodeFrame);
+        av_frame_free(&encodeFrame);
+    }
+
     // ==========================
     // 11. 【关键】安全刷新编码器
     // ==========================
-//    avcodec_send_frame(videoEncCtx, nullptr);
-//    AVPacket epkt;
-//    while (avcodec_receive_packet(videoEncCtx, &epkt) == 0) {
-//        epkt.stream_index = outVideo->index;
-//        av_packet_rescale_ts(&epkt, videoEncCtx->time_base, outVideo->time_base);
-//        av_interleaved_write_frame(ofmtCtx, &epkt);
-//        av_packet_unref(&epkt);
-//    }
+    avcodec_send_frame(videoEncCtx, nullptr);
+    AVPacket epkt;
+    av_init_packet(&epkt);
+    while (avcodec_receive_packet(videoEncCtx, &epkt) == 0) {
+        epkt.stream_index = outVideo->index;
+        av_packet_rescale_ts(&epkt, videoEncCtx->time_base, outVideo->time_base);
+        av_interleaved_write_frame(ofmtCtx, &epkt);
+        av_packet_unref(&epkt);
+    }
 
-//    avcodec_send_frame(audioEncCtx, nullptr);
-//    while (avcodec_receive_packet(audioEncCtx, &epkt) == 0) {
-//        epkt.stream_index = outAudio->index;
-//        av_packet_rescale_ts(&epkt, audioEncCtx->time_base, outAudio->time_base);
-//        av_interleaved_write_frame(ofmtCtx, &epkt);
-//        av_packet_unref(&epkt);
-//    }
+    avcodec_send_frame(audioEncCtx, nullptr);
+    while (avcodec_receive_packet(audioEncCtx, &epkt) == 0) {
+        epkt.stream_index = outAudio->index;
+        av_packet_rescale_ts(&epkt, audioEncCtx->time_base, outAudio->time_base);
+        av_interleaved_write_frame(ofmtCtx, &epkt);
+        av_packet_unref(&epkt);
+    }
 
     // ==========================
     // 12. 安全收尾释放
