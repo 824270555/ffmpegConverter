@@ -1,7 +1,11 @@
 FFmpeg 音视频转码工具（Qt + FFmpeg C API）| FFmpeg Audio & Video Transcoder (Qt + FFmpeg C API)
 
 FFmpeg-AAC-MP3-Video-Transcode
-
+<div align="center">
+  <img src="images/main_ui.png" width="800" alt="视频转码软件主界面">
+  <br>
+  <h3>FFmpeg 音视频转码工具 - 主界面截图</h3>
+</div>
 基于 Qt + FFmpeg C API 开发的跨平台音视频转码工具，专注解决 FFmpeg 转码过程中的常见崩溃、音视频不同步、格式不兼容等问题，支持视频编码转换与音频格式互转。
 A cross-platform audio and video transcoding tool developed based on Qt + FFmpeg C API, focusing on solving common problems such as crashes, audio-video desynchronization, and format incompatibility during FFmpeg transcoding, supporting video codec conversion and audio format mutual conversion.
 
