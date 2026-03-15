@@ -32,12 +32,13 @@ Widget::Widget(QWidget *parent) :
         // 获取选中行数
         int count = ui->tableWidget_fileList->selectedItems().size();
 
+        selectRowPaths.clear();
+
         if (count == 0) {
             // ======================================
             // ✅ 这里就是：没有选中任何行 或 取消选中
             // ======================================
-            qDebug() << "当前没有选中任何行！";
-            selectRowPaths.clear();
+            qDebug() << "当前没有选中任何行！";            
 
             // 你可以在这里做：
             // 按钮禁用、清空信息、重置状态等
@@ -196,28 +197,6 @@ void Widget::on_pushButton_startConcerter_clicked()
         QMessageBox::warning(this, "提示", "输出文件路径为空");
         return;
     }
-
-
-//    // 创建转码对象
-//    ConverterTool *conv = new ConverterTool;
-//    QThread *thread = new QThread;
-
-//    conv->moveToThread(thread);
-
-//    connect(thread, &QThread::started, [=]() {
-//        conv->startConvert(text, ui->lineEdit_out->text() + "/test.mp4");
-//    });
-//    connect(conv, &ConverterTool::finished, thread, &QThread::quit);
-//    connect(conv, &ConverterTool::finished, conv, &ConverterTool::deleteLater);
-//    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-//    connect(m_thread, &QThread::finished, this, [=]() {
-//        qDebug() << "转换完毕，删除对象";
-//    });
-
-//    // 进度条
-//    connect(conv, &ConverterTool::progress, ui->progressBar, &QProgressBar::setValue);
-
-//    thread->start();
 
     // 先判断：正在转码中，不允许重复点击
     if (m_thread && m_thread->isRunning()) {
